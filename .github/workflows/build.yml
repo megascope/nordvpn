@@ -35,8 +35,8 @@ jobs:
         ref=${{ github.ref }}
         vpatch=${ref##refs/*/}
         patch=${vpatch#v}
-        echo "::set-output name=date::$(date --utc --iso-8601=seconds)"
-        echo "::set-output name=version::$patch"
+        echo "date=$(date --utc --iso-8601=seconds)" >> $GITHUB_OUTPUT
+        echo "version=$patch" >> $GITHUB_OUTPUT
 
     - uses: docker/build-push-action@v3
       with:
