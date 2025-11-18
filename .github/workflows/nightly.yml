@@ -1,0 +1,59 @@
+name: Nightly NordVPN Tag
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest NordVPN version
+        id: latest
+        run: |
+          set -euo pipefail
+          URL="https://repo.nordvpn.com/deb/nordvpn/debian/dists/stable/main/binary-amd64/Packages"
+          pkgtmp=$(mktemp)
+          curl -fsSL "$URL" -o "$pkgtmp"
+          versions=$(awk 'BEGIN{p=0} /^Package: nordvpn$/ {p=1;next} p && /^Version:/ {print $2; p=0}' "$pkgtmp")
+          if [ -z "$versions" ]; then
+            echo "No versions found in Packages file" >&2
+            exit 1
+          fi
+          latest=$(echo "$versions" | sort -V | tail -n1)
+          echo "Latest version: $latest"
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag if missing
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          set -euo pipefail
+          git fetch --tags
+          git fetch origin master || true
+          if git show-ref --tags --quiet --verify "refs/tags/v${VERSION}"; then
+            echo "Tag v${VERSION} already exists"
+            exit 0
+          fi
+          if git show-ref --tags --quiet --verify "refs/tags/${VERSION}"; then
+            echo "Tag ${VERSION} already exists (without v prefix)"
+            exit 0
+          fi
+          if git rev-parse --verify origin/master >/dev/null 2>&1; then
+            git checkout master || git checkout -b master origin/master
+            git pull --ff-only origin master
+          else
+            echo "origin/master not found; aborting tag creation" >&2
+            exit 1
+          fi
+          git tag -a "v${VERSION}" -m "NordVPN version ${VERSION}"
+          git push origin "v${VERSION}"
+          echo "Created tag v${VERSION}"

@@ -3,6 +3,8 @@
 # nordvpn stores logins and other data in /var/lib/nordvpn
 FROM ubuntu:24.04
 
+ARG NORDVPN_VERSION=1.2.3   # set to an exact version shown by apt-cache policy
+
 RUN apt-get update && apt-get -y dist-upgrade
 
 RUN apt-get update && \
@@ -11,9 +13,10 @@ RUN apt-get update && \
 
 RUN wget -qO /etc/apt/trusted.gpg.d/nordvpn_public.asc https://repo.nordvpn.com/gpg/nordvpn_public.asc && \
     echo "deb https://repo.nordvpn.com/deb/nordvpn/debian stable main" > /etc/apt/sources.list.d/nordvpn.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends nordvpn && \
-    apt-get clean && \
+    apt-get update
+
+RUN apt-get install -y --no-install-recommends "nordvpn=${NORDVPN_VERSION}"
+RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["/bin/bash", "-c", "/etc/init.d/nordvpn start && sleep 5 && exec \"$0\" \"$@\"", "--"]
