@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --tags
-          git fetch origin master || true
+          git fetch origin main || true
           if git show-ref --tags --quiet --verify "refs/tags/v${VERSION}"; then
             echo "Tag v${VERSION} already exists"
             exit 0
@@ -47,11 +47,11 @@ jobs:
             echo "Tag ${VERSION} already exists (without v prefix)"
             exit 0
           fi
-          if git rev-parse --verify origin/master >/dev/null 2>&1; then
-            git checkout master || git checkout -b master origin/master
-            git pull --ff-only origin master
+          if git rev-parse --verify origin/main >/dev/null 2>&1; then
+            git checkout main || git checkout -b main origin/main
+            git pull --ff-only origin main
           else
-            echo "origin/master not found; aborting tag creation" >&2
+            echo "origin/main not found; aborting tag creation" >&2
             exit 1
           fi
           git tag -a "v${VERSION}" -m "NordVPN version ${VERSION}"
