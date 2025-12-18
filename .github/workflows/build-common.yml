@@ -1,0 +1,65 @@
+name: Reusable Build
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: 'tag to build (e.g. v1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-buildx-action@v2
+
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build-args
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          # Assume callers always pass `inputs.release_tag` when invoking this reusable workflow.
+          if [ -z "${INPUT_RELEASE_TAG:-}" ]; then
+            echo "inputs.release_tag is required for this workflow_call invocation" >&2
+            exit 1
+          fi
+          tag="$INPUT_RELEASE_TAG"
+          patch="${tag#v}"
+          echo "date=$(date --utc --iso-8601=seconds)" >> "$GITHUB_OUTPUT"
+          echo "version=$patch" >> "$GITHUB_OUTPUT"
+
+      - id: tags
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/megascope/nordvpn
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.build-args.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.build-args.outputs.version }}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }},value=${{ steps.build-args.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.build-args.outputs.version }}
+
+      - uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BUILD_DATE=${{ steps.build-args.outputs.date }}
+            IMAGE_VERSION=${{ steps.build-args.outputs.version }}
+            NORDVPN_VERSION=${{ steps.build-args.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
+          push: true
