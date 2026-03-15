@@ -15,6 +15,7 @@ jobs:
 
     outputs:
       version: ${{ steps.latest.outputs.version }}
+      should_build: ${{ steps.tag-check.outputs.should_build }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,7 +38,23 @@ jobs:
           echo "Latest version: $latest"
           echo "version=$latest" >> "$GITHUB_OUTPUT"
 
-      - name: Create release (creates tag if missing)
+      - name: Check whether tag already exists
+        id: tag-check
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists; skipping release and build."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag $tag is new; creating release and triggering build."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release for new tag
+        if: steps.tag-check.outputs.should_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.latest.outputs.version }}
@@ -47,6 +64,7 @@ jobs:
 
   run-build:
     needs: check-and-tag
+    if: needs.check-and-tag.outputs.should_build == 'true'
     uses: ./.github/workflows/build-common.yml
     with:
       release_tag: v${{ needs.check-and-tag.outputs.version }}
